@@ -1,0 +1,223 @@
+{
+  "_comment": "Tripletex API reference built from sandbox exploration. Account IDs vary per company — always look up by number.",
+  "endpoints": {
+    "POST /employee": {
+      "required": ["firstName", "lastName"],
+      "optional": ["email", "phoneNumberMobile", "employeeNumber", "dateOfBirth", "gender", "department", "userType"],
+      "payload_example": {
+        "firstName": "Ola",
+        "lastName": "Nordmann",
+        "email": "ola@example.com",
+        "phoneNumberMobile": "99999999",
+        "userType": "STANDARD",
+        "department": {"id": 12345}
+      },
+      "notes": "userType: STANDARD (default) | EXTENDED (required for admin) | NO_ACCESS. department: always required — GET /department and use first result. For admin: set userType=EXTENDED then PUT /employee/entitlement/:grantEntitlementsByTemplate?employeeId=X&template=ALL_PRIVILEGES."
+    },
+    "PUT /employee/entitlement/:grantEntitlementsByTemplate": {
+      "required_query_params": ["employeeId", "template"],
+      "notes": "template=ALL_PRIVILEGES grants ROLE_ADMINISTRATOR (97 entitlements). Employee must have userType=EXTENDED first. Returns empty body — handle gracefully."
+    },
+    "GET /employee": {
+      "search_params": ["email", "firstName", "lastName"],
+      "notes": "Use GET /employee?email=X for precise lookup. GET /employee?firstName=X&lastName=Y for name search."
+    },
+    "POST /customer": {
+      "required": ["name"],
+      "optional": ["organizationNumber", "email", "phoneNumber", "isCustomer", "isSupplier", "physicalAddress", "postalAddress"],
+      "payload_example": {
+        "name": "Acme AS",
+        "organizationNumber": "123456789",
+        "email": "post@acme.no",
+        "isCustomer": true,
+        "isSupplier": false,
+        "physicalAddress": {
+          "addressLine1": "Storgata 1",
+          "postalCode": "0001",
+          "city": "Oslo",
+          "country": {"id": 161}
+        }
+      },
+      "notes": "isCustomer defaults to FALSE in Tripletex — ALWAYS set explicitly. country.id=161 is Norway. Use physicalAddress for physical address, postalAddress for mailing address."
+    },
+    "GET /customer": {
+      "search_params": ["name", "organizationNumber"],
+      "notes": "GET /customer?organizationNumber=X for org lookup (most precise). GET /customer?name=X for name search."
+    },
+    "POST /product": {
+      "required": ["name"],
+      "optional": ["number", "priceExcludingVatCurrency", "priceIncludingVatCurrency", "costExcludingVatCurrency", "vatType", "productUnit", "description"],
+      "payload_example": {
+        "name": "Kontostol",
+        "number": "1001",
+        "priceExcludingVatCurrency": 2500.0,
+        "vatType": {"id": 3}
+      },
+      "notes": "number must be a STRING. vatType IDs (outgoing): 3=25%, 31=15%, 32=12%, 5=0%."
+    },
+    "POST /department": {
+      "required": ["name"],
+      "optional": ["departmentNumber"],
+      "notes": "moduleDepartmentAccounting may need enabling: PUT /company/modules {moduleDepartmentAccounting: true}."
+    },
+    "POST /project": {
+      "required": ["projectManager"],
+      "optional": ["name", "number", "startDate", "endDate", "customer", "isFixedPrice", "fixedprice", "description"],
+      "payload_example": {
+        "name": "Nettside 2026",
+        "startDate": "2026-01-01",
+        "projectManager": {"id": 12345},
+        "customer": {"id": 67890}
+      },
+      "notes": "startDate defaults to today if omitted. projectManager: REQUIRED. Competition pre-populates employee and customer — find by email/org number. GET /employee?email=X, GET /customer?organizationNumber=X."
+    },
+    "POST /order": {
+      "required": ["customer", "orderDate", "deliveryDate"],
+      "optional": ["orderLines", "project"],
+      "payload_example": {
+        "customer": {"id": 12345},
+        "orderDate": "2026-01-01",
+        "deliveryDate": "2026-01-31",
+        "orderLines": [
+          {
+            "count": 1,
+            "description": "Konsulenttjenester",
+            "unitPriceExcludingVatCurrency": 5000.0
+          }
+        ]
+      },
+      "notes": "deliveryDate is REQUIRED (cannot be null). Order lines: use description for free-text services. For products: use {product: {id: X}, count: 1, unitPriceExcludingVatCurrency: Y}. When productNumber is given in prompt, look up product: GET /product?number=X."
+    },
+    "POST /invoice": {
+      "required": ["orders", "invoiceDate", "invoiceDueDate"],
+      "optional": ["customer"],
+      "payload_example": {
+        "invoiceDate": "2026-01-01",
+        "invoiceDueDate": "2026-01-31",
+        "customer": {"id": 12345},
+        "orders": [{"id": 67890}]
+      },
+      "notes": "Must link to an order via orders list. Bank account required: call _ensure_bank_account before creating invoice. Account 1920 (Bankinnskudd) must have bankAccountNumber set: GET /ledger/account?isBankAccount=true, then PUT /ledger/account/{id} with {bankAccountNumber: '15030515002'}."
+    },
+    "PUT /invoice/{id}/:payment": {
+      "required_query_params": ["paymentDate", "paymentTypeId", "paidAmount"],
+      "notes": "paymentTypeId: GET /invoice/paymentType (use first result). paidAmount = invoice amountRemainingCurrency."
+    },
+    "PUT /invoice/{id}/:createCreditNote": {
+      "required_query_params": ["date"],
+      "notes": "Creates a credit note. date = today in YYYY-MM-DD. Returns new credit invoice id."
+    },
+    "PUT /project/{id}": {
+      "notes": "To set fixed price: GET /project/{id}?fields=*, set isFixedPrice=true and fixedprice=X, then PUT with full object."
+    },
+    "POST /travelExpense": {
+      "required": ["employee"],
+      "optional": ["title", "travelDetails"],
+      "payload_example": {
+        "employee": {"id": 12345},
+        "title": "Reise til Oslo",
+        "travelDetails": {"departureDate": "2026-01-15"}
+      },
+      "notes": "travelDetails.departureDate in YYYY-MM-DD. No 'description' field on travelExpense root object."
+    },
+    "POST /ledger/voucher": {
+      "required": ["date", "description", "postings"],
+      "payload_example": {
+        "date": "2026-01-01",
+        "description": "Leverandørfaktura INV-001",
+        "postings": [
+          {"account": {"id": 12345}, "amountCurrency": 22480.0, "description": "INV-001", "date": "2026-01-01"},
+          {"account": {"id": 67890}, "amountCurrency": 5620.0, "description": "INV-001", "date": "2026-01-01"},
+          {"account": {"id": 11111}, "amountCurrency": -28100.0, "description": "INV-001", "date": "2026-01-01"}
+        ]
+      },
+      "notes": "Supplier invoice voucher: debit expense account (7100 etc), debit input VAT (2710=25%, 2711=15%, 2712=12%), credit payables (2400). Positive = debit, negative = credit. ALWAYS look up account IDs by number: GET /ledger/account?number=7100."
+    }
+  },
+  "vat_types": {
+    "outgoing_sales": {
+      "25%": {"id": 3, "name": "Utgående avgift, høy sats"},
+      "15%": {"id": 31, "name": "Utgående avgift, middels sats"},
+      "12%": {"id": 32, "name": "Utgående avgift, lav sats"},
+      "0%": {"id": 5, "name": "Ingen utgående avgift (innenfor mva-loven)"}
+    },
+    "incoming_purchase": {
+      "25%": {"id": 1, "name": "Fradrag inngående avgift, høy sats"},
+      "15%": {"id": 11, "name": "Fradrag inngående avgift, middels sats"},
+      "12%": {"id": 12, "name": "Fradrag inngående avgift, lav sats"}
+    }
+  },
+  "standard_accounts": {
+    "1920": "Bankinnskudd (bank account — needs bankAccountNumber set for invoicing)",
+    "2400": "Leverandørgjeld (accounts payable — credit in supplier invoice voucher)",
+    "2710": "Inngående merverdiavgift, høy sats 25% (input VAT debit)",
+    "2711": "Inngående merverdiavgift, middels sats 15% (input VAT debit)",
+    "2712": "Inngående merverdiavgift, lav sats 12% (input VAT debit)",
+    "3000": "Salgsinntekt, avgiftspliktig (outgoing revenue)",
+    "6790": "Annen fremmed tjeneste (other external services)",
+    "7100": "Bilgodtgjørelse oppgavepliktig (car allowance — often used in competition as general expense)",
+    "7140": "Reisekostnad, ikke oppgavepliktig",
+    "7790": "Annen kostnad, fradragsberettiget (other deductible costs)"
+  },
+  "task_flow_chains": {
+    "create_invoice": [
+      "1. Ensure bank account: GET /ledger/account?isBankAccount=true → PUT /ledger/account/{id} if no bankAccountNumber",
+      "2. Find/create customer: GET /customer?organizationNumber=X or GET /customer?name=X",
+      "3. Lookup products if productNumbers in orderLines: GET /product?number=X",
+      "4. POST /order with customer + orderLines",
+      "5. POST /invoice with order id"
+    ],
+    "create_invoice_with_payment": [
+      "1. Ensure bank account",
+      "2. Find/create customer",
+      "3. Lookup products by number if specified",
+      "4. POST /order",
+      "5. POST /invoice",
+      "6. GET /invoice/paymentType (take first)",
+      "7. PUT /invoice/{id}/:payment"
+    ],
+    "project_billing": [
+      "1. GET /project?name=X → get project id",
+      "2. GET /project/{id}?fields=* → PUT with isFixedPrice=true, fixedprice=X",
+      "3. Find customer (GET /customer?organizationNumber=X)",
+      "4. Ensure bank account",
+      "5. POST /order with partial amount (fixedprice * percentage/100)",
+      "6. POST /invoice"
+    ],
+    "register_supplier_invoice": [
+      "1. Compute net = incl/(1+vat%), vat = incl - net",
+      "2. GET /ledger/account?number=7100 → expense account id",
+      "3. GET /ledger/account?number=2710 → input VAT account id (or 2711/2712)",
+      "4. GET /ledger/account?number=2400 → payables account id",
+      "5. POST /ledger/voucher with 3 postings"
+    ],
+    "register_payment": [
+      "1. Find customer: GET /customer?organizationNumber=X (or name)",
+      "2. GET /invoice/paymentType → first result",
+      "3. GET /invoice?customerId=X&invoiceStatus=OPEN",
+      "4. PUT /invoice/{id}/:payment"
+    ]
+  },
+  "competition_checks_known": {
+    "create_employee": {
+      "checks": ["employee_found (2pts)", "firstName (1pt)", "lastName (1pt)", "email (1pt)", "admin_role (5pt if requested)"],
+      "total_max": 10
+    },
+    "create_customer": {
+      "checks": ["customer_found", "name", "organizationNumber", "email", "addressLine1", "postalCode", "city", "isCustomer/isSupplier flags"],
+      "notes": "Address fields are checked — always extract from prompt"
+    },
+    "create_product": {
+      "checks": ["product_found", "name", "number", "price", "vatType"],
+      "notes": "vatPercentage in prompt → resolve to vatType id"
+    }
+  },
+  "sandbox_limitations": {
+    "notes": [
+      "No bank account pre-set → invoice 422 (works on competition accounts after _ensure_bank_account)",
+      "Employee emails persist across runs → duplicate 422 on repeat tests (use unique emails)",
+      "No pre-populated invoices → register_payment 422 (competition pre-populates)",
+      "moduleDepartmentAccounting=false → enable before department tasks"
+    ]
+  }
+}
